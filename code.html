@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Enrollment Form - JPDB v2.0</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f9f9f9;
+      padding: 20px;
+    }
+
+    .container {
+      background: #fff;
+      padding: 25px;
+      border-radius: 10px;
+      max-width: 600px;
+      margin: auto;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      margin-bottom: 5px;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    input[type="text"],
+    input[type="date"] {
+      width: 100%;
+      padding: 8px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    .button-group {
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 10px 15px;
+      margin-right: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      color: #fff;
+    }
+
+    .btn-save {
+      background-color: #28a745;
+    }
+
+    .btn-update {
+      background-color: #007bff;
+    }
+
+    .btn-reset {
+      background-color: #dc3545;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .alert {
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+
+    .alert-info {
+      background-color: #e7f3fe;
+      color: #31708f;
+    }
+
+    .alert-success {
+      background-color: #dff0d8;
+      color: #3c763d;
+    }
+
+    .alert-error {
+      background-color: #f2dede;
+      color: #a94442;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Student Enrollment Form</h1>
+      <p>JsonPowerDB v2.0 Integration</p>
+    </div>
+
+    <div class="jpdb-info">
+      <strong>Database:</strong> SCHOOL-DB | <strong>Relation:</strong> STUDENT-TABLE
+    </div>
+
+    <div id="alertContainer"></div>
+
+    <form id="studentForm">
+      <div class="form-group">
+        <label for="rollNo">Roll Number *</label>
+        <input type="text" id="rollNo" name="rollNo" required />
+      </div>
+
+      <div class="form-group">
+        <label for="fullName">Full Name *</label>
+        <input type="text" id="fullName" name="fullName" required disabled />
+      </div>
+
+      <div class="form-group">
+        <label for="class">Class *</label>
+        <input type="text" id="class" name="class" required disabled />
+      </div>
+
+      <div class="form-group">
+        <label for="birthDate">Birth Date *</label>
+        <input type="date" id="birthDate" name="birthDate" required disabled />
+      </div>
+
+      <div class="form-group">
+        <label for="address">Address *</label>
+        <input type="text" id="address" name="address" required disabled />
+      </div>
+
+      <div class="form-group">
+        <label for="enrollmentDate">Enrollment Date *</label>
+        <input type="date" id="enrollmentDate" name="enrollmentDate" required disabled />
+      </div>
+
+      <div class="button-group">
+        <button type="button" id="saveBtn" class="btn btn-save" disabled>Save</button>
+        <button type="button" id="updateBtn" class="btn btn-update" disabled>Update</button>
+        <button type="button" id="resetBtn" class="btn btn-reset" disabled>Reset</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const JPDB_BASE_URL = "http://api.login2explore.com:5577/";
+    const JPDB_IRL_URL = "/api/irl";
+    const JPDB_IML_URL = "/api/iml";
+    const CONNECTION_TOKEN = "90934626|-31949206258792515|90956408";
+    const DB_NAME = "SCHOOL-DB";
+    const RELATION_NAME = "STUDENT-TABLE";
+
+    const form = $('#studentForm');
+    const rollNoInput = $('#rollNo');
+    const fullNameInput = $('#fullName');
+    const classInput = $('#class');
+    const birthDateInput = $('#birthDate');
+    const addressInput = $('#address');
+    const enrollmentDateInput = $('#enrollmentDate');
+    const saveBtn = $('#saveBtn');
+    const updateBtn = $('#updateBtn');
+    const resetBtn = $('#resetBtn');
+    const alertContainer = $('#alertContainer');
+
+    let currentMode = 'new';
+    let currentRecordNo = null;
+
+    $(document).ready(function () {
+      resetForm();
+      rollNoInput.focus();
+
+      const today = new Date().toISOString().split('T')[0];
+      enrollmentDateInput.val(today);
+    });
+
+    rollNoInput.on('blur', function () {
+      const rollNo = $(this).val().trim();
+      if (rollNo) checkStudentExists(rollNo);
+    });
+
+    rollNoInput.on('keypress', function (e) {
+      if (e.key === 'Enter') $(this).blur();
+    });
+
+    saveBtn.on('click', saveStudent);
+    updateBtn.on('click', updateStudent);
+    resetBtn.on('click', resetForm);
+
+    function showAlert(message, type = 'info') {
+      const alertDiv = $('<div></div>').addClass(`alert alert-${type}`).text(message);
+      alertContainer.empty().append(alertDiv);
+      setTimeout(() => alertContainer.empty(), 5000);
+    }
+
+    function resetForm() {
+      form[0].reset();
+      rollNoInput.prop('disabled', false);
+      fullNameInput.prop('disabled', true);
+      classInput.prop('disabled', true);
+      birthDateInput.prop('disabled', true);
+      addressInput.prop('disabled', true);
+      enrollmentDateInput.prop('disabled', true);
+      saveBtn.prop('disabled', true);
+      updateBtn.prop('disabled', true);
+      resetBtn.prop('disabled', true);
+      currentMode = 'new';
+      currentRecordNo = null;
+      alertContainer.empty();
+      rollNoInput.focus();
+    }
+
+    function enableFormFields() {
+      fullNameInput.prop('disabled', false);
+      classInput.prop('disabled', false);
+      birthDateInput.prop('disabled', false);
+      addressInput.prop('disabled', false);
+      enrollmentDateInput.prop('disabled', false);
+      resetBtn.prop('disabled', false);
+    }
+
+    function validateForm() {
+      const fields = [rollNoInput, fullNameInput, classInput, birthDateInput, addressInput, enrollmentDateInput];
+      for (let field of fields) {
+        if (!field.val().trim()) {
+          showAlert(`Please fill in the ${field.prev('label').text().replace(' *', '')} field.`, 'error');
+          field.focus();
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function validateFormSilently() {
+      const fields = [rollNoInput, fullNameInput, classInput, birthDateInput, addressInput, enrollmentDateInput];
+      return fields.every(field => field.val().trim() !== '');
+    }
+
+    async function executeCommand(reqString, url) {
+      try {
+        const response = await $.ajax({
+          url: url,
+          type: 'POST',
+          contentType: 'application/json',
+          data: reqString
+        });
+        return { status: 200, data: response };
+      } catch (err) {
+        return { status: err.status || 500, message: err.responseText || err.statusText };
+      }
+    }
+
+    function createGET_BY_KEYRequest(key) {
+      const jsonStr = JSON.stringify({ [key]: rollNoInput.val().trim() });
+      return JSON.stringify({
+        token: CONNECTION_TOKEN,
+        dbName: DB_NAME,
+        cmd: "GET_BY_KEY",
+        rel: RELATION_NAME,
+        jsonStr: jsonStr
+      });
+    }
+
+    function createPUTRequest() {
+      const jsonStr = JSON.stringify({
+        "Roll-No": rollNoInput.val().trim(),
+        "Full-Name": fullNameInput.val().trim(),
+        "Class": classInput.val().trim(),
+        "Birth-Date": birthDateInput.val(),
+        "Address": addressInput.val().trim(),
+        "Enrollment-Date": enrollmentDateInput.val()
+      });
+      return JSON.stringify({
+        token: CONNECTION_TOKEN,
+        dbName: DB_NAME,
+        cmd: "PUT",
+        rel: RELATION_NAME,
+        jsonStr: jsonStr
+      });
+    }
+
+    function createUPDATERequest(recordNo) {
+      const jsonStr = JSON.stringify({
+        "Roll-No": rollNoInput.val().trim(),
+        "Full-Name": fullNameInput.val().trim(),
+        "Class": classInput.val().trim(),
+        "Birth-Date": birthDateInput.val(),
+        "Address": addressInput.val().trim(),
+        "Enrollment-Date": enrollmentDateInput.val()
+      });
+      return JSON.stringify({
+        token: CONNECTION_TOKEN,
+        dbName: DB_NAME,
+        cmd: "UPDATE",
+        rel: RELATION_NAME,
+        jsonStr: jsonStr,
+        rec_no: recordNo
+      });
+    }
+
+    async function checkStudentExists(rollNo) {
+      const reqString = createGET_BY_KEYRequest("Roll-No");
+      const result = await executeCommand(reqString, JPDB_BASE_URL + JPDB_IRL_URL);
+
+      if (result.status === 200) {
+        const studentData = result.data.data.record;
+        currentRecordNo = result.data.data.rec_no;
+        fullNameInput.val(studentData["Full-Name"]);
+        classInput.val(studentData["Class"]);
+        birthDateInput.val(studentData["Birth-Date"]);
+        addressInput.val(studentData["Address"]);
+        enrollmentDateInput.val(studentData["Enrollment-Date"]);
+
+        currentMode = 'update';
+        rollNoInput.prop('disabled', true);
+        enableFormFields();
+        updateBtn.prop('disabled', false);
+        fullNameInput.focus();
+        showAlert("Student found! You can now update the information.", "success");
+
+      } else if (result.status === 400 || result.status === 404) {
+        currentMode = 'new';
+        enableFormFields();
+        saveBtn.prop('disabled', false);
+        fullNameInput.focus();
+        showAlert("New student. Please fill in the details and save.", "info");
+
+      } else {
+        showAlert("Error checking student data.", "error");
+        rollNoInput.focus();
+      }
+    }
+
+    async function saveStudent() {
+      if (!validateForm()) return;
+
+      showAlert("Saving student data...", "info");
+      const reqString = createPUTRequest();
+      const result = await executeCommand(reqString, JPDB_BASE_URL + JPDB_IML_URL);
+
+      if (result.status === 200) {
+        showAlert("Student data saved successfully!", "success");
+        resetForm();
+      } else {
+        showAlert(`Error saving data: ${result.message}`, "error");
+      }
+    }
+
+    async function updateStudent() {
+      if (!validateForm()) return;
+
+      showAlert("Updating student data...", "info");
+      const reqString = createUPDATERequest(currentRecordNo);
+      const result = await executeCommand(reqString, JPDB_BASE_URL + JPDB_IML_URL);
+
+      if (result.status === 200) {
+        showAlert("Student data updated successfully!", "success");
+        resetForm();
+      } else {
+        showAlert(`Error updating data: ${result.message}`, "error");
+      }
+    }
+
+    form.on("input", function () {
+      const isValid = validateFormSilently();
+      if (currentMode === "new") saveBtn.prop("disabled", !isValid);
+      else if (currentMode === "update") updateBtn.prop("disabled", !isValid);
+    });
+  </script>
+</body>
+</html>
